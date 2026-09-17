@@ -89,34 +89,46 @@ export const calculateMonthlyBill = ({
   const monthRange = getMonthRange(year, month - 1);
   const monthStart = monthRange.monthStart;
   const monthEnd = monthRange.monthEnd;
+
   const effectiveStart = subscriptionStartDate && subscriptionStartDate > monthStart ? subscriptionStartDate : monthStart;
   const monthWeekdays = getWeekdaysInDateRange(monthStart, monthEnd);
-  const billableWeekdays = [];
+  const weekdaysBeforeStartDate = monthWeekdays.filter((day) => day < effectiveStart).length;
 
-  monthWeekdays.forEach((day) => {
-    if (day < effectiveStart || day > monthEnd) return;
-    const isPaused = pauses.some((pause) => {
+  const qualifyingWeekdays = monthWeekdays.filter((day) => {
+    if (day < effectiveStart || day > monthEnd) return false;
+    return includeStartDate ? day >= effectiveStart : day > effectiveStart;
+  });
+
+  const pausedWeekdaysInRange = qualifyingWeekdays.filter((day) =>
+    pauses.some((pause) => {
+      const start = pause.startDate || pause.start_date;
+      const end = pause.endDate || pause.end_date || day;
+      return isWithinRange(day, start, end);
+    })
+  ).length;
+
+  const billableWeekdays = qualifyingWeekdays.filter((day) => {
+    return !pauses.some((pause) => {
       const start = pause.startDate || pause.start_date;
       const end = pause.endDate || pause.end_date || day;
       return isWithinRange(day, start, end);
     });
-
-    if (!isPaused) {
-      billableWeekdays.push(day);
-    }
   });
 
-  const totalWeekdays = monthWeekdays.filter((day) => day >= effectiveStart && day <= monthEnd).length;
-  const pausedDays = totalWeekdays - billableWeekdays.length;
-  const ratePerDay = totalWeekdays > 0 ? Number((planPrice / totalWeekdays).toFixed(4)) : 0;
-  const finalAmount = Number((ratePerDay * billableWeekdays.length).toFixed(2));
+  const totalWeekdaysInMonth = monthWeekdays.length;
+  const billableDays = billableWeekdays.length;
+  const ratePerDay = totalWeekdaysInMonth > 0 ? Number((planPrice / totalWeekdaysInMonth).toFixed(4)) : 0;
+  const finalAmount = Number((ratePerDay * billableDays).toFixed(2));
 
   return {
     month: month,
     year,
-    totalWeekdays,
-    pausedDays,
-    billableDays: billableWeekdays.length,
+    totalWeekdaysInMonth,
+    weekdaysBeforeStartDate,
+    pausedWeekdaysInRange,
+    billableDays,
+    totalWeekdays: totalWeekdaysInMonth,
+    pausedDays: pausedWeekdaysInRange,
     ratePerDay,
     finalAmount,
     planPrice,
