@@ -19,13 +19,49 @@ export const getCustomers = async (req, res, next) => {
       query.phone = { $regex: search, $options: 'i' };
     }
 
-    const [customers, total] = await Promise.all([
-      Customer.find(query)
-        .sort({ [sortKey]: sortValue })
-        .skip(skip)
-        .limit(limit),
-      Customer.countDocuments(query),
-    ]);
+    const total = await Customer.countDocuments(query);
+    let customers = await Customer.find(query);
+
+    if (sortKey === 'status') {
+      const items = await Promise.all(
+        customers.map(async (customer) => {
+          const currentSubscription = await Subscription.findOne({ customerId: customer._id }).sort({ createdAt: -1 }).populate('planId');
+          const pauses = currentSubscription ? await Pause.find({ subscriptionId: currentSubscription._id }) : [];
+          const status = currentSubscription ? getSubscriptionStatus(currentSubscription.toObject(), pauses, new Date()) : 'Inactive';
+
+          return {
+            ...customer.toObject(),
+            currentPlan: currentSubscription?.planId ? { id: currentSubscription.planId._id, name: currentSubscription.planId.name } : null,
+            status,
+            subscriptionId: currentSubscription?._id || null,
+            startDate: currentSubscription?.startDate || null,
+          };
+        })
+      );
+
+      items.sort((a, b) => {
+        const first = a.status === 'Active' ? 1 : 0;
+        const second = b.status === 'Active' ? 1 : 0;
+        const comparison = first - second;
+        return direction === 'asc' ? comparison : -comparison;
+      });
+
+      const paginated = items.slice(skip, skip + limit);
+
+      return res.json({
+        success: true,
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit) || 1,
+        data: paginated,
+      });
+    }
+
+    customers = await Customer.find(query)
+      .sort({ [sortKey]: sortValue })
+      .skip(skip)
+      .limit(limit);
 
     const items = await Promise.all(
       customers.map(async (customer) => {

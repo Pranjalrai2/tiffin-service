@@ -46,6 +46,7 @@ const DashboardPage = () => {
           <select value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="createdAt">Join Date</option>
             <option value="name">Name</option>
+            <option value="status">Status</option>
             <option value="phone">Phone</option>
           </select>
 
