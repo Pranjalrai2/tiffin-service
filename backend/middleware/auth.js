@@ -11,7 +11,7 @@ export const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-    req.user = await User.findById(decoded.id).select('-passwordHash');
+    req.user = await User.findByPk(decoded.id, { attributes: { exclude: ['passwordHash'] } });
 
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'User not found.' });

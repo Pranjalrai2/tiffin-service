@@ -1,43 +1,44 @@
+import { Op } from 'sequelize';
 import Customer from '../models/Customer.js';
 import Subscription from '../models/Subscription.js';
 import Plan from '../models/Plan.js';
 import Pause from '../models/Pause.js';
 import { getSubscriptionStatus, formatDateOnly } from '../utils/billing.js';
 
+const serializeCustomerWithStatus = async (customer) => {
+  const currentSubscription = await Subscription.findOne({
+    where: { customerId: customer.id },
+    order: [['createdAt', 'DESC']],
+    include: [{ model: Plan, as: 'plan' }],
+  });
+
+  const pauses = currentSubscription ? await Pause.findAll({ where: { subscriptionId: currentSubscription.id }, order: [['startDate', 'ASC']] }) : [];
+  const status = currentSubscription ? getSubscriptionStatus(currentSubscription.toJSON(), pauses, new Date()) : 'Inactive';
+
+  return {
+    ...customer.toJSON(),
+    currentPlan: currentSubscription?.plan ? { id: currentSubscription.plan.id, name: currentSubscription.plan.name } : null,
+    status,
+    subscriptionId: currentSubscription?.id || null,
+    startDate: currentSubscription?.startDate || null,
+  };
+};
+
 export const getCustomers = async (req, res, next) => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
     const search = String(req.query.search || '').trim();
     const sortKey = String(req.query.sort || 'createdAt');
     const direction = String(req.query.direction || 'desc');
-    const sortValue = direction === 'asc' ? 1 : -1;
 
-    const query = {};
-    if (search) {
-      query.phone = { $regex: search, $options: 'i' };
-    }
-
-    const total = await Customer.countDocuments(query);
-    let customers = await Customer.find(query);
+    const where = search ? { phone: { [Op.like]: `%${search}%` } } : {};
+    const total = await Customer.count({ where });
 
     if (sortKey === 'status') {
-      const items = await Promise.all(
-        customers.map(async (customer) => {
-          const currentSubscription = await Subscription.findOne({ customerId: customer._id }).sort({ createdAt: -1 }).populate('planId');
-          const pauses = currentSubscription ? await Pause.find({ subscriptionId: currentSubscription._id }) : [];
-          const status = currentSubscription ? getSubscriptionStatus(currentSubscription.toObject(), pauses, new Date()) : 'Inactive';
-
-          return {
-            ...customer.toObject(),
-            currentPlan: currentSubscription?.planId ? { id: currentSubscription.planId._id, name: currentSubscription.planId.name } : null,
-            status,
-            subscriptionId: currentSubscription?._id || null,
-            startDate: currentSubscription?.startDate || null,
-          };
-        })
-      );
+      let customers = await Customer.findAll({ where });
+      const items = await Promise.all(customers.map((customer) => serializeCustomerWithStatus(customer)));
 
       items.sort((a, b) => {
         const first = a.status === 'Active' ? 1 : 0;
@@ -46,8 +47,7 @@ export const getCustomers = async (req, res, next) => {
         return direction === 'asc' ? comparison : -comparison;
       });
 
-      const paginated = items.slice(skip, skip + limit);
-
+      const paginated = items.slice(offset, offset + limit);
       return res.json({
         success: true,
         page,
@@ -58,26 +58,14 @@ export const getCustomers = async (req, res, next) => {
       });
     }
 
-    customers = await Customer.find(query)
-      .sort({ [sortKey]: sortValue })
-      .skip(skip)
-      .limit(limit);
+    const customers = await Customer.findAll({
+      where,
+      order: [[sortKey, direction === 'asc' ? 'ASC' : 'DESC']],
+      limit,
+      offset,
+    });
 
-    const items = await Promise.all(
-      customers.map(async (customer) => {
-        const currentSubscription = await Subscription.findOne({ customerId: customer._id }).sort({ createdAt: -1 }).populate('planId');
-        const pauses = currentSubscription ? await Pause.find({ subscriptionId: currentSubscription._id }) : [];
-        const status = currentSubscription ? getSubscriptionStatus(currentSubscription.toObject(), pauses, new Date()) : 'Inactive';
-
-        return {
-          ...customer.toObject(),
-          currentPlan: currentSubscription?.planId ? { id: currentSubscription.planId._id, name: currentSubscription.planId.name } : null,
-          status,
-          subscriptionId: currentSubscription?._id || null,
-          startDate: currentSubscription?.startDate || null,
-        };
-      })
-    );
+    const items = await Promise.all(customers.map((customer) => serializeCustomerWithStatus(customer)));
 
     res.json({
       success: true,
@@ -104,23 +92,28 @@ export const createCustomer = async (req, res, next) => {
 
 export const getCustomerById = async (req, res, next) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    const customer = await Customer.findByPk(req.params.id);
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Customer not found.' });
     }
 
-    const subscription = await Subscription.findOne({ customerId: customer._id }).sort({ createdAt: -1 }).populate('planId');
-    const pauses = subscription ? await Pause.find({ subscriptionId: subscription._id }).sort({ startDate: 1 }) : [];
-    const status = subscription ? getSubscriptionStatus(subscription.toObject(), pauses, new Date()) : 'Inactive';
+    const subscription = await Subscription.findOne({
+      where: { customerId: customer.id },
+      order: [['createdAt', 'DESC']],
+      include: [{ model: Plan, as: 'plan' }],
+    });
+
+    const pauses = subscription ? await Pause.findAll({ where: { subscriptionId: subscription.id }, order: [['startDate', 'ASC']] }) : [];
+    const status = subscription ? getSubscriptionStatus(subscription.toJSON(), pauses, new Date()) : 'Inactive';
 
     res.json({
       success: true,
       data: {
-        ...customer.toObject(),
+        ...customer.toJSON(),
         subscription: subscription
           ? {
-              ...subscription.toObject(),
-              plan: subscription.planId,
+              ...subscription.toJSON(),
+              plan: subscription.plan,
               pauses,
               status,
             }
@@ -134,11 +127,12 @@ export const getCustomerById = async (req, res, next) => {
 
 export const updateCustomer = async (req, res, next) => {
   try {
-    const customer = await Customer.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const customer = await Customer.findByPk(req.params.id);
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Customer not found.' });
     }
 
+    await customer.update(req.body);
     res.json({ success: true, data: customer });
   } catch (error) {
     next(error);
@@ -147,14 +141,20 @@ export const updateCustomer = async (req, res, next) => {
 
 export const deleteCustomer = async (req, res, next) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    const customer = await Customer.findByPk(req.params.id);
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Customer not found.' });
     }
 
-    await Subscription.deleteMany({ customerId: customer._id });
-    await Pause.deleteMany({ subscriptionId: { $in: await Subscription.find({ customerId: customer._id }).select('_id') } });
-    await customer.deleteOne();
+    const customerSubscriptions = await Subscription.findAll({ where: { customerId: customer.id }, attributes: ['id'] });
+    const subscriptionIds = customerSubscriptions.map((subscription) => subscription.id);
+
+    if (subscriptionIds.length > 0) {
+      await Pause.destroy({ where: { subscriptionId: subscriptionIds } });
+    }
+
+    await Subscription.destroy({ where: { customerId: customer.id } });
+    await customer.destroy();
 
     res.json({ success: true, message: 'Customer deleted.' });
   } catch (error) {

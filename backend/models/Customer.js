@@ -1,12 +1,47 @@
-import mongoose from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import sequelize from '../config/db.js';
 
-const customerSchema = new mongoose.Schema(
+class Customer extends Model {}
+
+Customer.init(
   {
-    name: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true, index: true },
-    address: { type: String, default: '' },
+    id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
+    },
+    phone: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
+    },
+    address: {
+      type: DataTypes.TEXT,
+      defaultValue: '',
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
   },
-  { timestamps: true }
+  {
+    sequelize,
+    modelName: 'Customer',
+    tableName: 'customers',
+    timestamps: false,
+    indexes: [{ fields: ['phone'] }],
+  }
 );
 
-export default mongoose.model('Customer', customerSchema);
+export default Customer;

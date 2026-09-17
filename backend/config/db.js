@@ -1,17 +1,25 @@
-import mongoose from 'mongoose';
+import path from 'node:path';
+import fs from 'node:fs';
+import { Sequelize } from 'sequelize';
 
-const connectDB = async () => {
-  const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/tiffintrack';
+const dbPath = path.resolve(process.cwd(), process.env.DATABASE_PATH || './data/tiffin.sqlite');
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
+const sequelize = new Sequelize({
+  dialect: 'sqlite',
+  storage: dbPath,
+  logging: false,
+});
+
+export const connectDB = async () => {
   try {
-    await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 5000,
-    });
-    console.log('MongoDB connected');
+    await sequelize.authenticate();
+    console.log(`SQLite connected: ${dbPath}`);
+    await sequelize.sync();
   } catch (error) {
-    console.error('MongoDB connection failed:', error.message);
+    console.error('SQLite connection failed:', error.message);
     process.exit(1);
   }
 };
 
-export default connectDB;
+export default sequelize;

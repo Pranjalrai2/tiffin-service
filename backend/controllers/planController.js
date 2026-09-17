@@ -2,7 +2,7 @@ import Plan from '../models/Plan.js';
 
 export const listPlans = async (req, res, next) => {
   try {
-    const plans = await Plan.find().sort({ createdAt: -1 });
+    const plans = await Plan.findAll({ order: [['createdAt', 'DESC']] });
     res.json({ success: true, data: plans });
   } catch (error) {
     next(error);
@@ -21,7 +21,7 @@ export const createPlan = async (req, res, next) => {
 
 export const getPlanById = async (req, res, next) => {
   try {
-    const plan = await Plan.findById(req.params.id);
+    const plan = await Plan.findByPk(req.params.id);
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found.' });
     }
@@ -33,10 +33,12 @@ export const getPlanById = async (req, res, next) => {
 
 export const updatePlan = async (req, res, next) => {
   try {
-    const plan = await Plan.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const plan = await Plan.findByPk(req.params.id);
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found.' });
     }
+
+    await plan.update(req.body);
     res.json({ success: true, data: plan });
   } catch (error) {
     next(error);
@@ -45,12 +47,12 @@ export const updatePlan = async (req, res, next) => {
 
 export const deletePlan = async (req, res, next) => {
   try {
-    const plan = await Plan.findById(req.params.id);
+    const plan = await Plan.findByPk(req.params.id);
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found.' });
     }
 
-    await plan.deleteOne();
+    await plan.destroy();
     res.json({ success: true, message: 'Plan deleted.' });
   } catch (error) {
     next(error);

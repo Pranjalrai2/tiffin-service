@@ -1,19 +1,79 @@
-import mongoose from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import sequelize from '../config/db.js';
+import Customer from './Customer.js';
+import Subscription from './Subscription.js';
 
-const billSchema = new mongoose.Schema(
+class Bill extends Model {}
+
+Bill.init(
   {
-    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
-    subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', required: true },
-    month: { type: Number, required: true },
-    year: { type: Number, required: true },
-    totalWeekdays: { type: Number, required: true },
-    pausedDays: { type: Number, required: true },
-    billableDays: { type: Number, required: true },
-    ratePerDay: { type: Number, required: true },
-    finalAmount: { type: Number, required: true },
-    generatedAt: { type: Date, default: Date.now },
+    id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    customerId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: Customer,
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+    },
+    subscriptionId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: Subscription,
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+    },
+    month: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    year: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    totalWeekdays: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    pausedDays: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    billableDays: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    ratePerDay: {
+      type: DataTypes.FLOAT,
+      allowNull: false,
+    },
+    finalAmount: {
+      type: DataTypes.FLOAT,
+      allowNull: false,
+    },
+    generatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
   },
-  { timestamps: true }
+  {
+    sequelize,
+    modelName: 'Bill',
+    tableName: 'bills',
+    timestamps: false,
+  }
 );
 
-export default mongoose.model('Bill', billSchema);
+Bill.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
+Bill.belongsTo(Subscription, { foreignKey: 'subscriptionId', as: 'subscription' });
+
+export default Bill;

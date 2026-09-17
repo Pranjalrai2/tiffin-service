@@ -1,12 +1,46 @@
-import mongoose from 'mongoose';
+import { DataTypes, Model } from 'sequelize';
+import sequelize from '../config/db.js';
 
-const planSchema = new mongoose.Schema(
+class Plan extends Model {}
+
+Plan.init(
   {
-    name: { type: String, required: true, trim: true },
-    pricePerMonth: { type: Number, required: true, min: 0 },
-    description: { type: String, default: '' },
+    id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
+    },
+    pricePerMonth: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 0,
+      },
+    },
+    description: {
+      type: DataTypes.TEXT,
+      defaultValue: '',
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
   },
-  { timestamps: true }
+  {
+    sequelize,
+    modelName: 'Plan',
+    tableName: 'plans',
+    timestamps: false,
+  }
 );
 
-export default mongoose.model('Plan', planSchema);
+export default Plan;

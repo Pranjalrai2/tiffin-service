@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import { connectDB } from './config/db.js';
 import User from './models/User.js';
 import Plan from './models/Plan.js';
 import Customer from './models/Customer.js';
@@ -9,17 +9,15 @@ import Pause from './models/Pause.js';
 
 dotenv.config();
 
-const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/tiffintrack';
-
 async function seed() {
-  await mongoose.connect(mongoUri);
+  await connectDB();
 
   await Promise.all([
-    User.deleteMany({}),
-    Plan.deleteMany({}),
-    Customer.deleteMany({}),
-    Subscription.deleteMany({}),
-    Pause.deleteMany({}),
+    User.destroy({ where: {} }),
+    Plan.destroy({ where: {} }),
+    Customer.destroy({ where: {} }),
+    Subscription.destroy({ where: {} }),
+    Pause.destroy({ where: {} }),
   ]);
 
   const passwordHash = await bcrypt.hash('admin123', 10);
@@ -55,28 +53,28 @@ async function seed() {
   });
 
   const subOne = await Subscription.create({
-    customerId: customerOne._id,
-    planId: annualPlan._id,
+    customerId: customerOne.id,
+    planId: annualPlan.id,
     startDate: '2026-09-01',
     isActive: true,
   });
 
   const subTwo = await Subscription.create({
-    customerId: customerTwo._id,
-    planId: premiumPlan._id,
+    customerId: customerTwo.id,
+    planId: premiumPlan.id,
     startDate: '2026-09-10',
     isActive: true,
   });
 
-  await Pause.insertMany([
+  await Pause.bulkCreate([
     {
-      subscriptionId: subOne._id,
+      subscriptionId: subOne.id,
       startDate: '2026-09-12',
       endDate: '2026-09-15',
       reason: 'Travel',
     },
     {
-      subscriptionId: subTwo._id,
+      subscriptionId: subTwo.id,
       startDate: '2026-09-18',
       endDate: '2026-09-20',
       reason: 'Festive holiday',
@@ -85,7 +83,7 @@ async function seed() {
 
   console.log('Seed complete');
   console.log({ owner, annualPlan, premiumPlan, customerOne, customerTwo, subOne, subTwo });
-  await mongoose.disconnect();
+  process.exit(0);
 }
 
 seed().catch((error) => {

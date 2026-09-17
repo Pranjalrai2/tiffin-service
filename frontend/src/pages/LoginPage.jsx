@@ -25,7 +25,21 @@ const LoginPage = () => {
       }
       navigate('/dashboard');
     } catch (err) {
-      setError(err?.response?.data?.message || 'Authentication failed');
+      const apiMessage = err?.response?.data?.message;
+      const validationErrors = err?.response?.data?.errors;
+
+      if (validationErrors && Array.isArray(validationErrors) && validationErrors.length > 0) {
+        const firstError = validationErrors[0];
+        setError(`${firstError.field}: ${firstError.message}`);
+        return;
+      }
+
+      if (apiMessage) {
+        setError(apiMessage);
+        return;
+      }
+
+      setError(err?.message || 'Authentication failed');
     }
   };
 
